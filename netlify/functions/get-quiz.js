@@ -96,7 +96,7 @@ async function fetchAllTasks(listId, token) {
   let page = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const url = `https://api.clickup.com/api/v2/list/${listId}/task?archived=false&include_closed=true&subtasks=false&page=${page}`;
+    const url = `https://api.clickup.com/api/v2/list/${listId}/task?archived=false&include_closed=true&subtasks=true&page=${page}`;
     const res = await fetch(url, { headers: { Authorization: token } });
     if (!res.ok) {
       throw new Error(`ClickUp API error (${res.status}): ${await res.text()}`);
