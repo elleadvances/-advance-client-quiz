@@ -21,7 +21,11 @@ exports.handler = async (event) => {
     return respond(500, { error: "Missing CLICKUP_API_TOKEN or CLICKUP_VIEW_ID." });
   }
 
-  const store = getStore("quiz-cache");
+  const store = getStore({
+    name: "quiz-cache",
+    siteID: process.env.NETLIFY_SITE_ID,
+    token: process.env.NETLIFY_AUTH_TOKEN,
+  });
   const tasksCacheKey = `tasks:${CLICKUP_VIEW_ID}`;
 
   try {

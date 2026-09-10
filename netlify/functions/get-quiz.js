@@ -15,7 +15,11 @@ exports.handler = async (event) => {
       return respond(500, { error: `Missing environment variables: ${missing.join(", ")}. See README.md.` });
     }
 
-    const store = getStore("quiz-cache");
+    const store = getStore({
+      name: "quiz-cache",
+      siteID: process.env.NETLIFY_SITE_ID,
+      token: process.env.NETLIFY_AUTH_TOKEN,
+    });
 
     // Fast path: "Refresh data" pre-builds a quiz for every PM. If one's
     // ready and still fresh, serve it instantly -- no ClickUp, Drive, or
