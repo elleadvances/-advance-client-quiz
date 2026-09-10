@@ -349,7 +349,11 @@
     try {
       const res = await fetch('/api/refresh-data');
       const data = await res.json();
-      document.getElementById('last-refreshed').textContent = formatRefreshedAt(data.lastRefreshedAt);
+      if (data.status === 'running') {
+        document.getElementById('last-refreshed').textContent = 'Refreshing… (this can take a minute or two)';
+      } else {
+        document.getElementById('last-refreshed').textContent = formatRefreshedAt(data.lastRefreshedAt);
+      }
     } catch (err) {
       document.getElementById('last-refreshed').textContent = 'Could not check data freshness';
     }
@@ -360,25 +364,62 @@
     btn.disabled = true;
     btn.textContent = 'Refreshing…';
     document.getElementById('last-refreshed').textContent = 'Pulling latest from ClickUp…';
+
     try {
-      const res = await fetch('/api/refresh-data', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        document.getElementById('last-refreshed').textContent = data.error || 'Refresh failed — try again.';
-      } else {
-        let msg = formatRefreshedAt(data.lastRefreshedAt);
-        if (typeof data.docsRefreshed === 'number') {
-          msg += ' · ' + data.docsRefreshed + ' doc' + (data.docsRefreshed === 1 ? '' : 's') + ' updated';
-          if (data.docsFailed) msg += ' (' + data.docsFailed + ' failed)';
-        }
-        if (typeof data.quizzesBuilt === 'number') {
-          msg += ' · ' + data.quizzesBuilt + ' quiz' + (data.quizzesBuilt === 1 ? '' : 'zes') + ' ready';
-        }
-        document.getElementById('last-refreshed').textContent = msg;
+      const triggerRes = await fetch('/api/refresh-data', { method: 'POST' });
+      const triggerData = await triggerRes.json();
+      if (!triggerRes.ok || triggerData.error) {
+        document.getElementById('last-refreshed').textContent = triggerData.error || 'Could not start refresh — try again.';
+        btn.disabled = false;
+        btn.textContent = 'Refresh data';
+        return;
       }
     } catch (err) {
       document.getElementById('last-refreshed').textContent = 'Could not reach the refresh service.';
+      btn.disabled = false;
+      btn.textContent = 'Refresh data';
+      return;
     }
+
+    // The actual work runs in the background and can take a couple of
+    // minutes (re-reading every doc, generating 5 quizzes). Poll for it to
+    // finish instead of waiting on one long request.
+    const maxPolls = 40; // ~2 minutes at 3s apart
+    for (let i = 0; i < maxPolls; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      try {
+        const res = await fetch('/api/refresh-data');
+        const data = await res.json();
+
+        if (data.status === 'running') {
+          document.getElementById('last-refreshed').textContent = 'Refreshing… (this can take a minute or two)';
+          continue;
+        }
+        if (data.status === 'error') {
+          document.getElementById('last-refreshed').textContent = data.error || 'Refresh failed — try again.';
+          break;
+        }
+        if (data.status === 'done') {
+          let msg = formatRefreshedAt(data.lastRefreshedAt);
+          if (typeof data.docsRefreshed === 'number') {
+            msg += ' · ' + data.docsRefreshed + ' doc' + (data.docsRefreshed === 1 ? '' : 's') + ' updated';
+            if (data.docsFailed) msg += ' (' + data.docsFailed + ' failed)';
+          }
+          if (typeof data.quizzesBuilt === 'number') {
+            msg += ' · ' + data.quizzesBuilt + ' quiz' + (data.quizzesBuilt === 1 ? '' : 'zes') + ' ready';
+          }
+          document.getElementById('last-refreshed').textContent = msg;
+          break;
+        }
+      } catch (err) {
+        // transient poll failure -- just try again on the next tick
+      }
+
+      if (i === maxPolls - 1) {
+        document.getElementById('last-refreshed').textContent = 'Refresh is taking longer than expected — check back in a bit.';
+      }
+    }
+
     btn.disabled = false;
     btn.textContent = 'Refresh data';
   });
