@@ -57,9 +57,15 @@ exports.handler = async (event) => {
     // doc that can't be fetched (bad link, sharing changed, etc.).
     const clients = [];
     for (const c of candidates) {
-      const fileId = extractDriveFileId(c.docUrl);
+      let fileId;
+      try {
+        fileId = await resolveDocFileId(c.docUrl, GOOGLE_API_KEY);
+      } catch (e) {
+        console.warn(`Could not resolve a doc for ${c.name}: ${e.message}`);
+        continue;
+      }
       if (!fileId) {
-        console.warn(`Could not find a Google Doc ID in the link for ${c.name}: ${c.docUrl}`);
+        console.warn(`Could not find a Google Doc for ${c.name}: ${c.docUrl}`);
         continue;
       }
       try {
@@ -148,6 +154,40 @@ function getFieldValueByName(task, fieldName) {
 function extractDriveFileId(url) {
   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
   return match ? match[1] : null;
+}
+
+// Pulls the folder ID out of a Google Drive folder URL, e.g.
+// https://drive.google.com/drive/folders/1s3cO5ux4FT3ef3pgQetVrFYPpve7MfdS
+function extractDriveFolderId(url) {
+  const match = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
+}
+
+// The WIP Master Doc field sometimes holds a direct Google Doc link, and
+// sometimes holds a link to the client's whole Drive FOLDER (with the
+// actual doc sitting inside it). This resolves either case down to a single
+// Google Doc file id we can export text from.
+async function resolveDocFileId(url, apiKey) {
+  const directId = extractDriveFileId(url);
+  if (directId) return directId;
+
+  const folderId = extractDriveFolderId(url);
+  if (!folderId) return null;
+
+  const q = encodeURIComponent(`'${folderId}' in parents and mimeType = 'application/vnd.google-apps.document' and trashed = false`);
+  const listUrl = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&key=${apiKey}`;
+  const res = await fetch(listUrl);
+  if (!res.ok) {
+    throw new Error(`Drive folder listing error (${res.status}): ${await res.text()}`);
+  }
+  const data = await res.json();
+  const files = data.files || [];
+  if (files.length === 0) return null;
+
+  // Prefer a file that looks like the actual master doc if there's more
+  // than one Google Doc sitting in the folder.
+  const masterDoc = files.find((f) => f.name && f.name.toLowerCase().includes("master doc"));
+  return (masterDoc || files[0]).id;
 }
 
 const MAX_DOC_CHARS = 15000;
