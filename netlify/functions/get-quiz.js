@@ -4,37 +4,43 @@ exports.handler = async (event) => {
 
     const {
       CLICKUP_API_TOKEN,
-      CLICKUP_LIST_ID,
-      CLICKUP_PM_FIELD_ID,
-      CLICKUP_DOC_FIELD_ID,
-      CLICKUP_STATUS_FIELD_ID,
+      CLICKUP_VIEW_ID,
+      CLICKUP_PM_FIELD_NAME,
+      CLICKUP_DOC_FIELD_NAME,
+      CLICKUP_STATUS_FIELD_NAME,
       CLICKUP_ACTIVE_STATUSES,
       GOOGLE_API_KEY,
       ANTHROPIC_API_KEY,
     } = process.env;
 
-    const missing = ["CLICKUP_API_TOKEN", "CLICKUP_LIST_ID", "CLICKUP_PM_FIELD_ID", "CLICKUP_DOC_FIELD_ID", "CLICKUP_STATUS_FIELD_ID", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"]
+    const missing = ["CLICKUP_API_TOKEN", "CLICKUP_VIEW_ID", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"]
       .filter((key) => !process.env[key]);
     if (missing.length) {
       return respond(500, { error: `Missing environment variables: ${missing.join(", ")}. See README.md.` });
     }
+
+    const pmFieldName = CLICKUP_PM_FIELD_NAME || "PM Assigned";
+    const docFieldName = CLICKUP_DOC_FIELD_NAME || "WIP Master Doc";
+    const statusFieldName = CLICKUP_STATUS_FIELD_NAME || "Client Status";
 
     const activeStatuses = (CLICKUP_ACTIVE_STATUSES || "active client")
       .split(",")
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
 
-    const tasks = await fetchAllTasks(CLICKUP_LIST_ID, CLICKUP_API_TOKEN);
+    const tasks = await fetchAllTasksFromView(CLICKUP_VIEW_ID, CLICKUP_API_TOKEN);
 
     // "Active" is tracked via the custom "Client Status" field (e.g. "Active
     // Client" / "Completed"), NOT ClickUp's built-in task status (Open/In
-    // Progress/Closed) \u2014 those are two different things on this list.
+    // Progress/Closed) -- those are two different things on this list.
+    // Fields are matched by NAME (not id), since the same task can live
+    // across lists/spaces where field ids differ but names stay consistent.
     const candidates = tasks
-      .filter((t) => activeStatuses.includes(getFieldValue(t, CLICKUP_STATUS_FIELD_ID).toLowerCase()))
+      .filter((t) => activeStatuses.includes(getFieldValueByName(t, statusFieldName).toLowerCase()))
       .map((t) => ({
         name: t.name,
-        pm: getFieldValue(t, CLICKUP_PM_FIELD_ID),
-        docUrl: getFieldValue(t, CLICKUP_DOC_FIELD_ID),
+        pm: getFieldValueByName(t, pmFieldName),
+        docUrl: getFieldValueByName(t, docFieldName),
       }))
       .filter((c) => c.docUrl && c.docUrl.trim().length > 0)
       .filter((c) => pm === "ALL" || (c.pm || "").toLowerCase() === pm.toLowerCase());
@@ -91,12 +97,17 @@ function respond(statusCode, body) {
   };
 }
 
-async function fetchAllTasks(listId, token) {
+// Pulls tasks the same way a ClickUp VIEW shows them, regardless of how many
+// underlying Lists/Spaces those tasks actually live in. This matters here
+// because client tasks can be cross-listed across multiple Lists (e.g. a
+// "Client Won List" in one Space plus an ops list in another), and the
+// per-PM tabs in ClickUp are views, not single Lists.
+async function fetchAllTasksFromView(viewId, token) {
   let tasks = [];
   let page = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const url = `https://api.clickup.com/api/v2/list/${listId}/task?archived=false&include_closed=true&subtasks=true&page=${page}`;
+    const url = `https://api.clickup.com/api/v2/view/${viewId}/task?page=${page}`;
     const res = await fetch(url, { headers: { Authorization: token } });
     if (!res.ok) {
       throw new Error(`ClickUp API error (${res.status}): ${await res.text()}`);
@@ -109,8 +120,10 @@ async function fetchAllTasks(listId, token) {
   return tasks;
 }
 
-function getFieldValue(task, fieldId) {
-  const field = (task.custom_fields || []).find((f) => f.id === fieldId);
+function getFieldValueByName(task, fieldName) {
+  const field = (task.custom_fields || []).find(
+    (f) => f.name && f.name.toLowerCase() === fieldName.toLowerCase()
+  );
   if (!field || field.value === undefined || field.value === null || field.value === "") return "";
 
   if (field.type === "drop_down" && field.type_config && Array.isArray(field.type_config.options)) {
@@ -125,7 +138,6 @@ function getFieldValue(task, fieldId) {
       .join(", ");
   }
   if (typeof field.value === "object") {
-    // e.g. rich text / short text stored as object in some field types
     return JSON.stringify(field.value);
   }
   return String(field.value);
@@ -141,7 +153,7 @@ function extractDriveFileId(url) {
 const MAX_DOC_CHARS = 15000;
 
 // Exports a public ("anyone with the link") Google Doc as plain text using
-// just an API key \u2014 no OAuth/service account needed since the doc is
+// just an API key -- no OAuth/service account needed since the doc is
 // link-shared. Returns the whole doc's text (all tabs run together).
 async function fetchDocText(fileId, apiKey) {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain&key=${apiKey}`;
@@ -161,13 +173,13 @@ async function generateQuiz(clients, apiKey) {
 
   const prompt = `You are building a multiple-choice quiz for an ad agency team to test how well they know their clients.
 
-Below is each client's full "WIP Master Doc" \u2014 a working document that mixes several things together: production notes, scripts, timelines, and (somewhere in it) the client's own answers from their onboarding/intake questionnaire (a GHL form). The questionnaire section is usually a clearly labeled set of questions and the client's own answers about their business, goals, audience, budget, brand voice, etc.
+Below is each client's full "WIP Master Doc" -- a working document that mixes several things together: production notes, scripts, timelines, and (somewhere in it) the client's own answers from their onboarding/intake questionnaire (a GHL form). The questionnaire section is usually a clearly labeled set of questions and the client's own answers about their business, goals, audience, budget, brand voice, etc.
 
 For EACH client, first find that questionnaire/intake-answers content within their doc and ignore everything else (production notes, scripts, internal comments, timelines). Then write ${perClient} multiple-choice questions that test a specific, memorable detail from the client's actual questionnaire answers. Rephrase and summarize in your own words rather than quoting verbatim. If you genuinely can't find any client-provided questionnaire answers in a client's doc, skip that client entirely rather than inventing questions from unrelated content.
 
 Rules:
 - Each question has exactly 4 options, only one correct.
-- Wrong options should be plausible \u2014 pull them from other clients' real answers when you can, so the quiz tests actual client knowledge rather than obvious guessing.
+- Wrong options should be plausible -- pull them from other clients' real answers when you can, so the quiz tests actual client knowledge rather than obvious guessing.
 - Never invent a fact that isn't supported by the client's own questionnaire answers.
 - Return ONLY valid JSON, no markdown fences, no commentary, in exactly this shape:
 [{"client":"<client name>","question":"<question text>","options":["A","B","C","D"],"correctIndex":0}]
