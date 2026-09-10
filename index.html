@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Client Questionnaire Quiz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B1526;
+    --bg-card: #101F38;
+    --bg-card-hover: #14294A;
+    --line: #223255;
+    --blue: #3E7BFA;
+    --blue-dark: #1E4FD1;
+    --text: #F2F5FA;
+    --text-muted: #8FA0C2;
+    --good: #34D399;
+    --bad: #F87171;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+  }
+
+  h1, h2, .badge-number {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: 560px;
+  }
+
+  .eyebrow-free-title {
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.15;
+    margin: 0 0 8px;
+  }
+
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 16px;
+    margin: 0 0 40px;
+    line-height: 1.5;
+  }
+
+  /* --- PM picker --- */
+  .pm-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .pm-card {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+    text-align: left;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 17px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .pm-card:hover { background: var(--bg-card-hover); border-color: var(--blue); }
+
+  .pm-card.all {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, var(--blue-dark), var(--blue));
+    border: none;
+  }
+
+  /* --- Quiz --- */
+  .progress {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  .progress-track {
+    flex: 1;
+    height: 4px;
+    background: var(--line);
+    border-radius: 2px;
+    margin: 0 14px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--blue);
+    border-radius: 2px;
+    transition: width 0.25s ease;
+  }
+
+  .client-tag {
+    display: inline-block;
+    color: var(--blue);
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+
+  .question-text {
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.4;
+    margin: 0 0 24px;
+  }
+
+  .options { display: flex; flex-direction: column; gap: 10px; }
+
+  .option {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    text-align: left;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 15.5px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .option:hover:not(.locked) { border-color: var(--blue); }
+
+  .option.correct { border-color: var(--good); background: rgba(52, 211, 153, 0.12); }
+  .option.incorrect { border-color: var(--bad); background: rgba(248, 113, 113, 0.12); }
+  .option.locked { cursor: default; }
+
+  .next-btn {
+    margin-top: 24px;
+    width: 100%;
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 15px;
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: none;
+  }
+
+  .next-btn.show { display: block; }
+  .next-btn:hover { background: var(--blue-dark); }
+
+  /* --- Results --- */
+  .results { text-align: center; }
+
+  .score-badge {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue-dark), var(--blue));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+  }
+
+  .badge-number { font-size: 34px; font-weight: 700; }
+
+  .breakdown {
+    text-align: left;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin: 28px 0;
+  }
+
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 15px;
+  }
+
+  .breakdown-row:last-child { border-bottom: none; }
+  .breakdown-row span:last-child { color: var(--text-muted); }
+
+  .retry-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 12px;
+    padding: 14px 24px;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .retry-btn:hover { border-color: var(--blue); }
+
+  /* --- Loading / empty / error --- */
+  .status-box {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px 0;
+    font-size: 15px;
+  }
+
+  .back-link {
+    display: inline-block;
+    margin-top: 20px;
+    color: var(--blue);
+    font-size: 14px;
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div id="screen-picker">
+    <h1 class="eyebrow-free-title">Client Questionnaire Quiz</h1>
+    <p class="subtitle">Pick a PM to quiz yourself on their active clients \u2014 or test everything at once.</p>
+    <div class="pm-grid">
+      <button class="pm-card" data-pm="Aldrin">Aldrin</button>
+      <button class="pm-card" data-pm="Alexis">Alexis</button>
+      <button class="pm-card" data-pm="Ann">Ann</button>
+      <button class="pm-card" data-pm="Liz">Liz</button>
+      <button class="pm-card all" data-pm="ALL">All Clients</button>
+    </div>
+  </div>
+
+  <div id="screen-quiz" class="hidden">
+    <div class="progress">
+      <span id="progress-label">Question 1 of 1</span>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+      <span id="score-label">0 correct</span>
+    </div>
+    <div id="question-body"></div>
+  </div>
+
+  <div id="screen-status" class="hidden">
+    <div class="status-box" id="status-text">Loading\u2026</div>
+    <div style="text-align:center;"><span class="back-link" id="status-back">Choose a different PM</span></div>
+  </div>
+
+  <div id="screen-results" class="hidden results">
+    <div class="score-badge"><span class="badge-number" id="score-fraction">0/0</span></div>
+    <h2 id="results-heading">Nice work</h2>
+    <p class="subtitle" id="results-sub" style="margin-bottom:0;"></p>
+    <div class="breakdown" id="breakdown"></div>
+    <button class="retry-btn" id="retry-btn">Try a different PM</button>
+  </div>
+
+</div>
+
+<script>
+  const screens = {
+    picker: document.getElementById('screen-picker'),
+    quiz: document.getElementById('screen-quiz'),
+    status: document.getElementById('screen-status'),
+    results: document.getElementById('screen-results'),
+  };
+
+  function show(name) {
+    Object.values(screens).forEach(s => s.classList.add('hidden'));
+    screens[name].classList.remove('hidden');
+  }
+
+  let questions = [];
+  let current = 0;
+  let correctCount = 0;
+  let clientResults = {}; // { clientName: { correct: n, total: n } }
+  let currentPm = 'ALL';
+
+  document.querySelectorAll('.pm-card').forEach(btn => {
+    btn.addEventListener('click', () => loadQuiz(btn.dataset.pm));
+  });
+
+  document.getElementById('status-back').addEventListener('click', () => show('picker'));
+  document.getElementById('retry-btn').addEventListener('click', () => show('picker'));
+
+  async function loadQuiz(pm) {
+    currentPm = pm;
+    show('status');
+    document.getElementById('status-text').textContent = 'Pulling client questionnaires and building your quiz\u2026';
+    try {
+      const res = await fetch('/api/get-quiz?pm=' + encodeURIComponent(pm));
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        document.getElementById('status-text').textContent = data.error || 'Something went wrong. Try again.';
+        return;
+      }
+      if (!data.questions || data.questions.length === 0) {
+        document.getElementById('status-text').textContent = data.message || 'No active clients with a completed questionnaire were found.';
+        return;
+      }
+      questions = data.questions;
+      current = 0;
+      correctCount = 0;
+      clientResults = {};
+      questions.forEach(q => {
+        if (!clientResults[q.client]) clientResults[q.client] = { correct: 0, total: 0 };
+        clientResults[q.client].total += 1;
+      });
+      renderQuestion();
+      show('quiz');
+    } catch (err) {
+      document.getElementById('status-text').textContent = 'Couldn\u2019t reach the quiz service. Try again in a moment.';
+    }
+  }
+
+  function renderQuestion() {
+    const q = questions[current];
+    document.getElementById('progress-label').textContent = 'Question ' + (current + 1) + ' of ' + questions.length;
+    document.getElementById('progress-fill').style.width = ((current) / questions.length * 100) + '%';
+    document.getElementById('score-label').textContent = correctCount + ' correct';
+
+    const body = document.getElementById('question-body');
+    body.innerHTML = '';
+
+    const tag = document.createElement('div');
+    tag.className = 'client-tag';
+    tag.textContent = q.client;
+    body.appendChild(tag);
+
+    const question = document.createElement('div');
+    question.className = 'question-text';
+    question.textContent = q.question;
+    body.appendChild(question);
+
+    const optionsWrap = document.createElement('div');
+    optionsWrap.className = 'options';
+
+    q.options.forEach((opt, i) => {
+      const b = document.createElement('button');
+      b.className = 'option';
+      b.textContent = opt;
+      b.addEventListener('click', () => selectAnswer(i, b, optionsWrap, q));
+      optionsWrap.appendChild(b);
+    });
+
+    body.appendChild(optionsWrap);
+
+    const next = document.createElement('button');
+    next.className = 'next-btn';
+    next.id = 'next-btn';
+    next.textContent = current === questions.length - 1 ? 'See results' : 'Next question';
+    next.addEventListener('click', () => {
+      current += 1;
+      if (current >= questions.length) {
+        showResults();
+      } else {
+        renderQuestion();
+      }
+    });
+    body.appendChild(next);
+  }
+
+  function selectAnswer(i, btn, wrap, q) {
+    if (wrap.classList.contains('answered')) return;
+    wrap.classList.add('answered');
+
+    const buttons = wrap.querySelectorAll('.option');
+    buttons.forEach(b => b.classList.add('locked'));
+
+    if (i === q.correctIndex) {
+      btn.classList.add('correct');
+      correctCount += 1;
+      clientResults[q.client].correct += 1;
+    } else {
+      btn.classList.add('incorrect');
+      buttons[q.correctIndex].classList.add('correct');
+    }
+
+    document.getElementById('score-label').textContent = correctCount + ' correct';
+    document.getElementById('next-btn').classList.add('show');
+  }
+
+  function showResults() {
+    document.getElementById('score-fraction').textContent = correctCount + '/' + questions.length;
+    const pct = Math.round((correctCount / questions.length) * 100);
+    document.getElementById('results-heading').textContent =
+      pct === 100 ? 'Perfect score' : pct >= 70 ? 'Solid work' : 'Room to review';
+    document.getElementById('results-sub').textContent =
+      (currentPm === 'ALL' ? 'Across all active clients' : 'On ' + currentPm + '\u2019s active clients') + ' \u2014 ' + pct + '% correct.';
+
+    const breakdown = document.getElementById('breakdown');
+    breakdown.innerHTML = '';
+    Object.entries(clientResults).forEach(([client, r]) => {
+      const row = document.createElement('div');
+      row.className = 'breakdown-row';
+      row.innerHTML = '<span>' + client + '</span><span>' + r.correct + '/' + r.total + '</span>';
+      breakdown.appendChild(row);
+    });
+
+    show('results');
+  }
+</script>
+
+</body>
+</html>
