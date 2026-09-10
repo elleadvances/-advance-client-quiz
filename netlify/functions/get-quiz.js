@@ -72,6 +72,10 @@ exports.handler = async (event) => {
       });
     }
 
+    // This only runs as a live fallback if a pre-built quiz isn't cached
+    // yet (normally "Refresh data" builds every PM's quiz in the
+    // background with no cap -- see refresh-data-background.js). Capped
+    // here since this path runs in a normal, time-limited function.
     const MAX_CLIENTS = 20;
     const cappedClients = clients.length > MAX_CLIENTS ? shuffle(clients).slice(0, MAX_CLIENTS) : clients;
 

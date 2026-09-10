@@ -14,7 +14,12 @@ const { fetchAllTasksFromView, getActiveClientsWithDocs, fieldConfigFromEnv, KNO
 const { resolveDocFileId, fetchDocText } = require("./lib/drive");
 const { generateQuiz, shuffle } = require("./lib/quiz");
 
-const MAX_CLIENTS_PER_QUIZ = 20;
+// This runs as a background job with a much longer time budget than a
+// normal function, so there's no need to cap how many clients go into one
+// quiz here -- "All Clients" should mean genuinely all of them. (The
+// generateQuiz prompt already scales questions-per-client down as the
+// client count grows, to keep the Anthropic response a manageable size.)
+const MAX_CLIENTS_PER_QUIZ = Infinity;
 
 exports.handler = async () => {
   const { CLICKUP_API_TOKEN, CLICKUP_VIEW_ID, GOOGLE_API_KEY, ANTHROPIC_API_KEY } = process.env;
