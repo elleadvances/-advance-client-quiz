@@ -86,6 +86,35 @@
     border: none;
   }
 
+  .refresh-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+
+  #last-refreshed {
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .refresh-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--text-muted);
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .refresh-btn:hover:not(:disabled) { border-color: var(--blue); color: var(--text); }
+  .refresh-btn:disabled { opacity: 0.5; cursor: default; }
+
   /* --- Quiz --- */
   .progress {
     display: flex;
@@ -250,6 +279,10 @@
       <button class="pm-card" data-pm="Liz">Liz</button>
       <button class="pm-card all" data-pm="ALL">All Clients</button>
     </div>
+    <div class="refresh-row">
+      <span id="last-refreshed">Checking data freshness…</span>
+      <button id="refresh-btn" class="refresh-btn">Refresh data</button>
+    </div>
   </div>
 
   <div id="screen-quiz" class="hidden">
@@ -301,6 +334,56 @@
 
   document.getElementById('status-back').addEventListener('click', () => show('picker'));
   document.getElementById('retry-btn').addEventListener('click', () => show('picker'));
+
+  function formatRefreshedAt(ms) {
+    if (!ms) return 'Data not loaded yet';
+    const diffMins = Math.round((Date.now() - ms) / 60000);
+    const when = diffMins < 1 ? 'just now'
+      : diffMins < 60 ? diffMins + ' min ago'
+      : diffMins < 1440 ? Math.round(diffMins / 60) + ' hr ago'
+      : new Date(ms).toLocaleString();
+    return 'Data last refreshed: ' + when;
+  }
+
+  async function loadRefreshStatus() {
+    try {
+      const res = await fetch('/api/refresh-data');
+      const data = await res.json();
+      document.getElementById('last-refreshed').textContent = formatRefreshedAt(data.lastRefreshedAt);
+    } catch (err) {
+      document.getElementById('last-refreshed').textContent = 'Could not check data freshness';
+    }
+  }
+
+  document.getElementById('refresh-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('refresh-btn');
+    btn.disabled = true;
+    btn.textContent = 'Refreshing…';
+    document.getElementById('last-refreshed').textContent = 'Pulling latest from ClickUp…';
+    try {
+      const res = await fetch('/api/refresh-data', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        document.getElementById('last-refreshed').textContent = data.error || 'Refresh failed — try again.';
+      } else {
+        let msg = formatRefreshedAt(data.lastRefreshedAt);
+        if (typeof data.docsRefreshed === 'number') {
+          msg += ' · ' + data.docsRefreshed + ' doc' + (data.docsRefreshed === 1 ? '' : 's') + ' updated';
+          if (data.docsFailed) msg += ' (' + data.docsFailed + ' failed)';
+        }
+        if (typeof data.quizzesBuilt === 'number') {
+          msg += ' · ' + data.quizzesBuilt + ' quiz' + (data.quizzesBuilt === 1 ? '' : 'zes') + ' ready';
+        }
+        document.getElementById('last-refreshed').textContent = msg;
+      }
+    } catch (err) {
+      document.getElementById('last-refreshed').textContent = 'Could not reach the refresh service.';
+    }
+    btn.disabled = false;
+    btn.textContent = 'Refresh data';
+  });
+
+  loadRefreshStatus();
 
   async function loadQuiz(pm) {
     currentPm = pm;
