@@ -56,25 +56,28 @@ exports.handler = async (event) => {
     // Pull each client's doc content. Skip (don't fail the whole quiz) any
     // doc that can't be fetched (bad link, sharing changed, etc.).
     const clients = [];
-    for (const c of candidates) {
-      let fileId;
-      try {
-        fileId = await resolveDocFileId(c.docUrl, GOOGLE_API_KEY);
-      } catch (e) {
-        console.warn(`Could not resolve a doc for ${c.name}: ${e.message}`);
-        continue;
-      }
-      if (!fileId) {
-        console.warn(`Could not find a Google Doc for ${c.name}: ${c.docUrl}`);
-        continue;
-      }
-      try {
-        const text = await fetchDocText(fileId, GOOGLE_API_KEY);
-        if (text && text.trim().length > 0) {
-          clients.push({ name: c.name, docText: text });
+    // Fetch every client's doc in parallel rather than one at a time --
+    // with more than a handful of clients (e.g. a busy PM, or "ALL"),
+    // sequential fetches can add up and exceed the function's time limit.
+    const results = await Promise.allSettled(
+      candidates.map(async (c) => {
+        const fileId = await resolveDocFileId(c.docUrl, GOOGLE_API_KEY);
+        if (!fileId) {
+          throw new Error(`Could not find a Google Doc for ${c.name}: ${c.docUrl}`);
         }
-      } catch (e) {
-        console.warn(`Could not fetch doc for ${c.name}: ${e.message}`);
+        const text = await fetchDocText(fileId, GOOGLE_API_KEY);
+        if (!text || text.trim().length === 0) {
+          throw new Error(`Empty doc for ${c.name}`);
+        }
+        return { name: c.name, docText: text };
+      })
+    );
+
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        clients.push(r.value);
+      } else {
+        console.warn(r.reason && r.reason.message ? r.reason.message : r.reason);
       }
     }
 
@@ -86,9 +89,14 @@ exports.handler = async (event) => {
       });
     }
 
-    const questions = await generateQuiz(clients, ANTHROPIC_API_KEY);
+    // Cap how many clients go into one quiz -- keeps the Anthropic call (and
+    // overall function runtime) bounded for busy PMs or "All Clients".
+    const MAX_CLIENTS = 20;
+    const cappedClients = clients.length > MAX_CLIENTS ? shuffle(clients).slice(0, MAX_CLIENTS) : clients;
 
-    return respond(200, { questions, clients: clients.map((c) => c.name) });
+    const questions = await generateQuiz(cappedClients, ANTHROPIC_API_KEY);
+
+    return respond(200, { questions, clients: cappedClients.map((c) => c.name) });
   } catch (err) {
     console.error(err);
     return respond(500, { error: err.message || "Something went wrong generating the quiz." });
