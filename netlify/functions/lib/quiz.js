@@ -1,5 +1,5 @@
 async function generateQuiz(clients, apiKey) {
-  const perClient = clients.length > 6 ? 2 : 3;
+  const perClient = clients.length > 15 ? 1 : clients.length > 6 ? 2 : 3;
   const clientBlock = clients
     .map((c) => `=== Client: ${c.name} ===\n${c.docText}`)
     .join("\n\n---\n\n");
@@ -12,6 +12,7 @@ For EACH client, first find that questionnaire/intake-answers content within the
 
 Rules:
 - Each question has exactly 4 options, only one correct.
+- Vary WHICH position (1st, 2nd, 3rd, or 4th) holds the correct answer from question to question -- don't always put it first.
 - Wrong options should be plausible -- pull them from other clients' real answers when you can, so the quiz tests actual client knowledge rather than obvious guessing.
 - Never invent a fact that isn't supported by the client's own questionnaire answers.
 - Return ONLY valid JSON, no markdown fences, no commentary, in exactly this shape:
@@ -30,7 +31,7 @@ ${clientBlock}`;
     },
     body: JSON.stringify({
       model: "claude-sonnet-5",
-      max_tokens: 4096,
+      max_tokens: 8192,
       messages: [{ role: "user", content: prompt }],
     }),
   });
@@ -52,7 +53,19 @@ ${clientBlock}`;
     throw new Error("Couldn't parse quiz JSON from Claude's response.");
   }
 
-  return shuffle(questions);
+  // Claude tends to write the correct answer first regardless of the
+  // instruction above -- shuffle each question's own options (not just the
+  // order of the questions) so the correct answer's position actually
+  // varies, rather than always landing in slot 0.
+  const withShuffledOptions = questions.map((q) => {
+    if (!Array.isArray(q.options) || typeof q.correctIndex !== "number") return q;
+    const correctText = q.options[q.correctIndex];
+    const shuffledOptions = shuffle(q.options);
+    const newCorrectIndex = shuffledOptions.indexOf(correctText);
+    return { ...q, options: shuffledOptions, correctIndex: newCorrectIndex };
+  });
+
+  return shuffle(withShuffledOptions);
 }
 
 function shuffle(arr) {
