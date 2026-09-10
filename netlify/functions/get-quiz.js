@@ -7,26 +7,30 @@ exports.handler = async (event) => {
       CLICKUP_LIST_ID,
       CLICKUP_PM_FIELD_ID,
       CLICKUP_DOC_FIELD_ID,
+      CLICKUP_STATUS_FIELD_ID,
       CLICKUP_ACTIVE_STATUSES,
       GOOGLE_API_KEY,
       ANTHROPIC_API_KEY,
     } = process.env;
 
-    const missing = ["CLICKUP_API_TOKEN", "CLICKUP_LIST_ID", "CLICKUP_PM_FIELD_ID", "CLICKUP_DOC_FIELD_ID", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"]
+    const missing = ["CLICKUP_API_TOKEN", "CLICKUP_LIST_ID", "CLICKUP_PM_FIELD_ID", "CLICKUP_DOC_FIELD_ID", "CLICKUP_STATUS_FIELD_ID", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY"]
       .filter((key) => !process.env[key]);
     if (missing.length) {
       return respond(500, { error: `Missing environment variables: ${missing.join(", ")}. See README.md.` });
     }
 
-    const activeStatuses = (CLICKUP_ACTIVE_STATUSES || "active")
+    const activeStatuses = (CLICKUP_ACTIVE_STATUSES || "active client")
       .split(",")
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
 
     const tasks = await fetchAllTasks(CLICKUP_LIST_ID, CLICKUP_API_TOKEN);
 
+    // "Active" is tracked via the custom "Client Status" field (e.g. "Active
+    // Client" / "Completed"), NOT ClickUp's built-in task status (Open/In
+    // Progress/Closed) \u2014 those are two different things on this list.
     const candidates = tasks
-      .filter((t) => activeStatuses.includes((t.status && t.status.status || "").toLowerCase()))
+      .filter((t) => activeStatuses.includes(getFieldValue(t, CLICKUP_STATUS_FIELD_ID).toLowerCase()))
       .map((t) => ({
         name: t.name,
         pm: getFieldValue(t, CLICKUP_PM_FIELD_ID),
