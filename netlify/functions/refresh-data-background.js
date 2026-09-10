@@ -51,6 +51,7 @@ exports.handler = async () => {
     const docTextByName = {};
     let docsRefreshed = 0;
     let docsFailed = 0;
+    const docErrors = [];
 
     const docResults = await Promise.allSettled(
       allActive.map(async (c) => {
@@ -67,13 +68,16 @@ exports.handler = async () => {
         docsRefreshed += 1;
       } else {
         docsFailed += 1;
-        console.warn(r.reason && r.reason.message ? r.reason.message : r.reason);
+        const msg = r.reason && r.reason.message ? r.reason.message : String(r.reason);
+        docErrors.push(msg);
+        console.warn(msg);
       }
     }
 
     // 3. Pre-build and cache a quiz for every PM option, in parallel.
     let quizzesBuilt = 0;
     let quizzesFailed = 0;
+    const quizErrors = [];
 
     const quizResults = await Promise.allSettled(
       KNOWN_PMS.map(async (pm) => {
@@ -94,7 +98,7 @@ exports.handler = async () => {
           const questions = await generateQuiz(capped, ANTHROPIC_API_KEY);
           await store.setJSON(`quiz:${pm}`, { questions, clients: capped.map((c) => c.name), fetchedAt });
         } catch (e) {
-          console.error(`Quiz build failed for PM "${pm}" (${capped.length} clients): ${e.message}`);
+          quizErrors.push(`${pm} (${capped.length} clients): ${e.message}`);
           throw e;
         }
       })
@@ -108,8 +112,10 @@ exports.handler = async () => {
       taskCount: tasks.length,
       docsRefreshed,
       docsFailed,
+      docErrors,
       quizzesBuilt,
       quizzesFailed,
+      quizErrors,
     });
   } catch (err) {
     console.error(err);
