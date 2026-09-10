@@ -1,8 +1,8 @@
 // TEMPORARY DEBUG TOOL. Visit:
 //   https://<your-site>.netlify.app/api/debug-tasks
 //   https://<your-site>.netlify.app/api/debug-tasks?name=Casey Woodard
-// Now pulls from the ClickUp VIEW (CLICKUP_VIEW_ID) instead of a single
-// list, matching whatever the Main List / per-PM tabs show on screen.
+// Pulls from the ClickUp VIEW (CLICKUP_VIEW_ID), matching whatever the
+// Main List / per-PM tabs show on screen.
 // With no ?name=, shows the raw name/status/PM/doc/client-status values for
 // the first several tasks. With ?name=, searches ALL tasks for one matching
 // that name and dumps its FULL raw custom_fields array.
