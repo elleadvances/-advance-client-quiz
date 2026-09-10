@@ -409,6 +409,14 @@
             msg += ' · ' + data.quizzesBuilt + ' quiz' + (data.quizzesBuilt === 1 ? '' : 'zes') + ' ready';
           }
           document.getElementById('last-refreshed').textContent = msg;
+
+          const allErrors = [].concat(data.docErrors || [], data.quizErrors || []);
+          if (allErrors.length > 0) {
+            console.warn('Refresh errors:', allErrors);
+            document.getElementById('last-refreshed').title = allErrors.join('\n');
+            document.getElementById('last-refreshed').style.cursor = 'help';
+            document.getElementById('last-refreshed').style.textDecoration = 'underline dotted';
+          }
           break;
         }
       } catch (err) {
