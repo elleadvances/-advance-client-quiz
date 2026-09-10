@@ -90,8 +90,13 @@ exports.handler = async () => {
         }
 
         const capped = clients.length > MAX_CLIENTS_PER_QUIZ ? shuffle(clients).slice(0, MAX_CLIENTS_PER_QUIZ) : clients;
-        const questions = await generateQuiz(capped, ANTHROPIC_API_KEY);
-        await store.setJSON(`quiz:${pm}`, { questions, clients: capped.map((c) => c.name), fetchedAt });
+        try {
+          const questions = await generateQuiz(capped, ANTHROPIC_API_KEY);
+          await store.setJSON(`quiz:${pm}`, { questions, clients: capped.map((c) => c.name), fetchedAt });
+        } catch (e) {
+          console.error(`Quiz build failed for PM "${pm}" (${capped.length} clients): ${e.message}`);
+          throw e;
+        }
       })
     );
     quizzesBuilt = quizResults.filter((r) => r.status === "fulfilled").length;
