@@ -21,7 +21,7 @@ exports.handler = async (event) => {
       const tasks = await fetchAllTasks(CLICKUP_LIST_ID, CLICKUP_API_TOKEN);
       const match = tasks.find((t) => t.name && t.name.toLowerCase().includes(nameQuery.toLowerCase()));
       if (!match) {
-        return respond(404, { error: `No task found with a name containing "${nameQuery}".` });
+        return respond(404, { error: `No task found with a name containing "${nameQuery}".`, totalTasksScanned: tasks.length });
       }
       return respond(200, {
         name: match.name,
